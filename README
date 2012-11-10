@@ -1,0 +1,59 @@
+# README
+# Lemur Updater
+# Author: Brian Tomlinson
+# Contact: darthlukan@gmail.com 
+
+
+
+
+# Requirements:
+
+In order for lupdater.py to work as intended, the sudoers file must be edited to allow 'pacman -Syy' to be run
+by any user.  Liquid Lemur Linux users will already have the necessary change included via this line in /etc/sudoers:
+
+	%wheel ALL = (ALL) NOPASSWD: /usr/bin/pacman -Syy
+
+As well as the same line in /etc/sudoers.d/g_wheel (thanks to the Archbang team for that one).
+
+lupdater.py uses dbus notifications but in a simple way.  So long as the user can run 
+
+'/usr/bin/notify-send foo'
+
+the scripts will run as intended, again, users who installed Liquid Lemur Linux from the ISO will not have to worry about this.  Plans are in the works so that Arch users utilizing the [lemur] repo will gain this benefit simply by installing the package.  As of this writing, that time is still in the future.
+
+The back-end is auto-started at login by the 'lupdater.desktop' file located in '~/.config/autostart'. The same is true of the GUI with its own 'lupdaterapi.desktop' file.
+Users who are not getting notifications and do not see a 'lupdater.log' file in '/tmp' should check to make sure that they have the 'lupdater.desktop' file in the proper directory.  If it is not there, you may create the file with the 
+following as its contents:
+
+	[Desktop Entry]
+	Name=lupdater
+	Description=Start lupdater.py in the background for update notifications.
+	Exec=lupdater &
+	Terminal=false
+
+Once you have created the file, you can either logout and log back into your desktop, reboot, or simply run 'lupdater &' as a normal user in a terminal.  The next time you login or reboot the script should run (assuming you created the lupdater.desktop file with the above contents).  If not, please contact the Liquid Lemur developer team via our forums located at http://liquidlemur.org.
+
+
+# Extra information for power users:
+
+lupdater.py is installed by default in '/usr/bin', it is then symlinked to 'lupdater'.  lupdater uses sudo to access permissions ONLY for 'pacman -Syy', view the source code of /usr/bin/lupdater.py to verify this.  If you wish to modify the default behavior or lupdater.py please be aware that the Liquid Lemur developer team ONLY OFFICIALLY supports code that we write.  If you edit the default PKGBUILD or lupdater.py directly in order to change the default behavior we will help where we can, but do not expect too much of us.  That said...
+
+If you wish to change the default timer, edit the following starting on line 15 of lupdaterapi.py:
+
+	# Timer variable. Changing this number will adjust the sleeper.
+	# The value is in seconds, the default is 4 hours.
+	rest = 14400 <----
+
+The time is in seconds.  A quick Google search will provide you with all of the information you could want on how to convert minutes, hours, days, weeks, etc to seconds.  While lupdater.py is small and does not use any noticable system resources, changing the default value could have unintended results. You've been warned.
+
+The log file is kept in '/tmp/lupdater.log' by default.  To change this behavior, edit the following:
+
+	open('/tmp/lupdater.log', 'w+')
+	f = open('/tmp/lupdater.log', 'a+')
+
+IMPORTANT: Make sure that if you change the default log location that your regular user has write access to the directory! 
+
+NOTE: The log only tells if the notifier is running.  As of this writing the logging is not very verbose but it does provide an accurate time and date, let's you know what the notifier is doing (in general), and can be extended to provide more verbose logging if desired.
+
+IMPORTANT: If you do extend the functionality of the lupdater.py and lupdaterapi.py scripts, please let us know! We are very open to patches from
+the community and always give credit where it is due.
