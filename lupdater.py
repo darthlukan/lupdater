@@ -29,10 +29,14 @@ class SystemTrayIcon(QtGui.QSystemTrayIcon):
         sys.exit(0)
 
     def check_updates(self):
-        p = Pacman()
-        p.pac_update()
 
-        return p.pac_list()
+        uname = os.uname()
+        if uname[2].endswith('ARCH'):
+            p = Pacman()
+            p.pac_update()
+            return p.pac_list()
+        else:
+            sys.exit('This program only understands Pacman at this point. You\'re package manager is unsupported.')
 
 
 class Pacman(object):
@@ -46,14 +50,18 @@ class Pacman(object):
 
     def pac_update(self):
         """Updates the repositories, notifies the user."""
+
         subprocess.call(['/usr/bin/notify-send', 'Updating repositories for update check...'], shell=False)
 
         upd = subprocess.Popen('/usr/bin/sudo pacman -Syy', shell=True, stdout=subprocess.PIPE)
         stdout, stderr = upd.communicate()
 
+        return True
+
     def pac_list(self):
         """Creates a list of packages needing to be updated and counts them,
         displays the count in a notification for user action."""
+
         subprocess.call(['/usr/bin/notify-send', 'Checking for updates...'], shell=False)
 
         # Clean up the list from previous checks so that we keep an accurate count.
@@ -84,7 +92,6 @@ class Pacman(object):
         """Checks specifically for linux kernel packages to let the user know
         of whether they need to reboot for changes to take effect."""
         # TODO: Check for other packages such as modules that require system
-        # restart to take effect.
         if len(paclist) > 0:
             for i in paclist:
                 if i.startswith('linux'):
@@ -96,21 +103,29 @@ class Pacman(object):
                                  '%s %s' % (i, 'is a critical update, it requires a system restart to take effect.')],
                                 shell=False)
 
-                logging.info(time.ctime() + ': Critical update detected, user notified via notify-send.')
+            logging.info(time.ctime() + ': Critical update detected, user notified via notify-send.')
 
         return self.critical
 
 
 def main():
 
-    logging.basicConfig(filename='/tmp/lupdater.log', level=logging.DEBUG)
+    version = sys.version
 
-    app = QtGui.QApplication(sys.argv)
-    w = QtGui.QWidget()
-    trayIcon = SystemTrayIcon(QtGui.QIcon("lupdater.png"), w)
-    trayIcon.show()
+    if version.startswith('3'):
 
-    sys.exit(app.exec_())
+        logging.basicConfig(filename='/tmp/lupdater.log', level=logging.DEBUG)
+
+        app = QtGui.QApplication(sys.argv)
+        w = QtGui.QWidget()
+        trayIcon = SystemTrayIcon(QtGui.QIcon("lupdater.png"), w)
+        trayIcon.show()
+
+        sys.exit(app.exec_())
+
+    else:
+        sys.exit('This program requires Python 3.x.x!')
+
 
 if __name__ == '__main__':
     main()
