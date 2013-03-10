@@ -3,14 +3,13 @@
 # Contact: darthlukan at gmail dot com
 
 pkgname=lupdater
-pkgver=1.2b
+pkgver=1.3a
 pkgrel=1
-pkgdesc='Liquid Lemur Linux Update Notifier written in Python.'
+pkgdesc='Update notifier for Linux distros based on major versions (Arch, Red Hat, Debian, etc).'
 arch=('any')
-url='http://liquidlemur.com'
+url='http://github.com/darthlukan/lupdater'
 license=('GPLv2')
-groups=('lemurapps')
-depends=('python>=2.7, libnotify')
+depends=('python>=3, python-notify2')
 replaces=('lupdater')
 source=(http://archrepo.liquidlemur.com/sources/any/$pkgname-$pkgver.tar.gz)
 md5sums=('a4f1915222361b7becec4ef26121ae27')
@@ -47,8 +46,4 @@ build() {
 
     cd ${pkgdir}/usr/bin/
     ln -s lupdater.py lupdater
-
-    msg2 "If you are not a Liquid Lemur Linux user, the following messages apply to you:"
-    msg2 "You must now edit /etc/sudoers by adding (modulo)wheel ALL = NOPASSWD: /usr/bin/pacman -Syy for lupdater to work properly!"
-    msg2 "Please read the README located in /usr/share/doc/lupdater for more information!"
 }
