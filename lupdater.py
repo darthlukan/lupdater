@@ -7,9 +7,12 @@
 # License: GPLv2
 
 import os
+import pwd
 import sys
 import time
+import notify2
 import logging
+import platform
 import subprocess
 from PyQt4 import QtGui
 
@@ -20,6 +23,7 @@ class SystemTrayIcon(QtGui.QSystemTrayIcon):
         QtGui.QSystemTrayIcon.__init__(self, icon, parent)
 
         menu = QtGui.QMenu(parent)
+        menu.addAction("About", self.about)
         menu.addAction("Check Updates", self.check_updates)
         menu.addAction("Exit", self.exit)
 
@@ -29,47 +33,107 @@ class SystemTrayIcon(QtGui.QSystemTrayIcon):
         sys.exit(0)
 
     def check_updates(self):
+        pass
 
-        uname = os.uname()
-        if uname[2].endswith('ARCH'):
-            p = Pacman()
-            p.pac_update()
-            return p.pac_list()
-        else:
-            sys.exit('This program only understands Pacman at this point. You\'re package manager is unsupported.')
+    def about(self):
+        pass
 
 
-class Pacman(object):
-    """Provides functions to call pacman and update the repos, as well as
-    return a list with number of updates. """
+class Setup(object):
 
     def __init__(self):
         self.paclist = []
         self.critical = []
         self.numupdates = 0
+        self.system = {'distro': '',
+                       'pkgmgr': '',
+                       'repoupd': '',
+                       'pkglist': ''}
 
-    def pac_update(self):
+    def distro(self):
+
+        debian = ['ubuntu', 'linuxmint', 'soluos', 'debian', 'peppermint']
+        redhat = ['redhat', 'fedora', 'centos']
+        distro = platform.linux_distribution()[0].lower()
+        self.system['distro'] = distro
+
+        if distro == 'arch':
+            self.system['pkgmgr'] = 'pacman'
+            self.system['repoupd'] = '-Syy'
+            self.system['pkglist'] = '-Qu'
+        elif distro in debian:
+            self.system['pkgmgr'] = 'apt-get'
+            self.system['repoupd'] = 'update'
+            self.system['pkglist'] = '-s upgrade'
+        elif distro in redhat:
+            self.system['pkgmgr'] = 'yum'
+            self.system['repoupd'] = 'update'
+            self.system['pkglist'] = 'list updates'
+        else:
+            print('Your distribution is not supported.')
+            raise NotImplementedError
+
+        return self.system
+
+    def user(self):
+        pass
+
+
+class Log(object):
+
+    def __init__(self):
+        logging.basicConfig(filename='/tmp/lupdater.log', level=logging.DEBUG)
+
+    def updates(self, numupdates):
+        if numupdates > 0:
+            logging.info(time.ctime() + ': lupdater had %s updates available.\n' % numupdates)
+        else:
+            logging.info(time.ctime() + ': No updates available, system is up to date.')
+
+    def critical(self, crit):
+        if crit > 0:
+            logging.info(time.ctime() + ': Critical update detected, user notified via notify-send.')
+
+
+class Pacman(Setup):
+    """Provides functions to call pacman and update the repos, as well as
+    return a list with number of updates. """
+
+    def __init__(self):
+        super().__init__()
+        self.system = super().distro_setup()
+        self.paclist = super().paclist
+        self.critical = super().critical
+        self.numupdates = super().numupdates
+
+    def update(self):
         """Updates the repositories, notifies the user."""
 
-        subprocess.call(['/usr/bin/notify-send', 'Updating repositories for update check...'], shell=False)
+        pkgmgr = self.system['pkgmgr']
+        repoupd = self.system['repoupd']
 
-        upd = subprocess.Popen('/usr/bin/sudo pacman -Syy', shell=True, stdout=subprocess.PIPE)
+        note_set_send(title="Updating repos", body="Getting latest package lists.")
+
+        upd = subprocess.Popen('/usr/bin/sudo %s %s', shell=True, stdout=subprocess.PIPE % pkgmgr, repoupd)
         stdout, stderr = upd.communicate()
 
         return True
 
-    def pac_list(self):
+    def list_packs(self):
         """Creates a list of packages needing to be updated and counts them,
         displays the count in a notification for user action."""
 
-        subprocess.call(['/usr/bin/notify-send', 'Checking for updates...'], shell=False)
+        pkgmgr = self.system['pkgmgr']
+        repoupd = self.system['repoupd']
+
+        note_set_send(title="Checking packages", body="...")
 
         # Clean up the list from previous checks so that we keep an accurate count.
         if len(self.paclist) > 0:
             for i in self.paclist:
                 self.paclist.remove(i)
 
-        lst = subprocess.Popen('/usr/bin/pacman -Qu', shell=True, stdout=subprocess.PIPE)
+        lst = subprocess.Popen('/usr/bin/%s %s', shell=True, stdout=subprocess.PIPE % pkgmgr, repoupd)
 
         for line in lst.stdout:
             line = str(line, encoding="utf8")
@@ -79,19 +143,17 @@ class Pacman(object):
         self.numupdates = len(self.paclist)
 
         if self.numupdates >= 1:
-            subprocess.call(['/usr/bin/notify-send',
-                             '%s %s %s' % ('You have', self.numupdates, 'updates available!')], shell=False)
-            logging.info(time.ctime() + ': lupdater had %s updates available.\n' % self.numupdates)
+            note_set_send(title="Updates Available!", body="You have %i updates available." % self.numupdates)
+            self.check_critical(self.paclist)
         else:
-            subprocess.call(['/usr/bin/notify-send', 'Your system is already up to date! :)'], shell=False)
-            logging.info(time.ctime() + ': No updates available, system is up to date.')
+            note_set_send(title="Nothing to do!", body="Your system is up to date.")
 
         return self.paclist
 
-    def pac_check_list(self, paclist):
+    def check_critical(self, paclist):
         """Checks specifically for linux kernel packages to let the user know
         of whether they need to reboot for changes to take effect."""
-        # TODO: Check for other packages such as modules that require system
+        # TODO: Check for other packages such as modules that require system/service restart.
         if len(paclist) > 0:
             for i in paclist:
                 if i.startswith('linux'):
@@ -99,13 +161,16 @@ class Pacman(object):
 
         if len(self.critical) >= 1:
             for i in self.critical:
-                subprocess.call(['/usr/bin/notify-send',
-                                 '%s %s' % (i, 'is a critical update, it requires a system restart to take effect.')],
-                                shell=False)
-
-            logging.info(time.ctime() + ': Critical update detected, user notified via notify-send.')
+                note_set_send(title="Critical Update!", body="%s is a critical update and requires a restart." % i)
 
         return self.critical
+
+
+def note_set_send(title, body):
+    """ Sends and sends notification to DBUS for display."""
+    notify2.init('lupdater')
+    n = notify2.Notification(title, body)
+    return n.show()
 
 
 def main():
@@ -113,8 +178,6 @@ def main():
     version = sys.version
 
     if version.startswith('3'):
-
-        logging.basicConfig(filename='/tmp/lupdater.log', level=logging.DEBUG)
 
         app = QtGui.QApplication(sys.argv)
         w = QtGui.QWidget()
