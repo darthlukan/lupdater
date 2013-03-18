@@ -33,10 +33,20 @@ class SystemTrayIcon(QtGui.QSystemTrayIcon):
         sys.exit(0)
 
     def check_updates(self):
-        pass
+
+        system = Setup().distro()
+
+        if system['distro'] == 'arch':
+            return Setup().arch()
+        elif system['distro'] == 'debian':
+            return Setup().debian()
+        elif system['distro'] == 'redhat':
+            return Setup().redhat()
+        else:
+            return note_set_send(title="Not yet implemented", body="")
 
     def about(self):
-        pass
+        note_set_send(title="Not yet implemented", body="")
 
 
 class Setup(object):
@@ -55,17 +65,19 @@ class Setup(object):
         debian = ['ubuntu', 'linuxmint', 'soluos', 'debian', 'peppermint']
         redhat = ['redhat', 'fedora', 'centos']
         distro = platform.linux_distribution()[0].lower()
-        self.system['distro'] = distro
 
         if distro == 'arch':
+            self.system['distro'] = 'arch'
             self.system['pkgmgr'] = 'pacman'
             self.system['repoupd'] = '-Syy'
             self.system['pkglist'] = '-Qu'
         elif distro in debian:
+            self.system['distro'] = 'debian'
             self.system['pkgmgr'] = 'apt-get'
             self.system['repoupd'] = 'update'
             self.system['pkglist'] = '-s upgrade'
         elif distro in redhat:
+            self.system['distro'] = 'redhat'
             self.system['pkgmgr'] = 'yum'
             self.system['repoupd'] = 'update'
             self.system['pkglist'] = 'list updates'
@@ -77,6 +89,24 @@ class Setup(object):
 
     def user(self):
         pass
+
+    def arch(self):
+        p = Pacman()
+        p.update()
+        p.list_packs()
+        return True
+
+    def debian(self):
+        a = Apt()
+        a.update()
+        a.list_packs()
+        return True
+
+    def redhat(self):
+        r = Redhat()
+        r.update()
+        r.list_packs()
+        return True
 
 
 class Log(object):
@@ -100,21 +130,22 @@ class Pacman(Setup):
     return a list with number of updates. """
 
     def __init__(self):
-        super().__init__()
-        self.system = super().distro_setup()
-        self.paclist = super().paclist
-        self.critical = super().critical
-        self.numupdates = super().numupdates
+        setup = Setup()
+        self.system = setup.distro()
+        self.paclist = setup.paclist
+        self.critical = setup.critical
+        self.numupdates = setup.numupdates
 
     def update(self):
         """Updates the repositories, notifies the user."""
 
         pkgmgr = self.system['pkgmgr']
         repoupd = self.system['repoupd']
+        args = ["/usr/bin/sudo", pkgmgr, repoupd]
 
         note_set_send(title="Updating repos", body="Getting latest package lists.")
 
-        upd = subprocess.Popen('/usr/bin/sudo %s %s', shell=True, stdout=subprocess.PIPE % pkgmgr, repoupd)
+        upd = subprocess.Popen(args, shell=False, stdout=subprocess.PIPE)
         stdout, stderr = upd.communicate()
 
         return True
@@ -124,7 +155,8 @@ class Pacman(Setup):
         displays the count in a notification for user action."""
 
         pkgmgr = self.system['pkgmgr']
-        repoupd = self.system['repoupd']
+        pkglist = self.system['pkglist']
+        args = [pkgmgr, pkglist]
 
         note_set_send(title="Checking packages", body="...")
 
@@ -133,7 +165,7 @@ class Pacman(Setup):
             for i in self.paclist:
                 self.paclist.remove(i)
 
-        lst = subprocess.Popen('/usr/bin/%s %s', shell=True, stdout=subprocess.PIPE % pkgmgr, repoupd)
+        lst = subprocess.Popen(args, shell=False, stdout=subprocess.PIPE)
 
         for line in lst.stdout:
             line = str(line, encoding="utf8")
@@ -164,6 +196,44 @@ class Pacman(Setup):
                 note_set_send(title="Critical Update!", body="%s is a critical update and requires a restart." % i)
 
         return self.critical
+
+
+class Apt(Setup):
+
+    def __init__(self):
+        setup = Setup()
+        self.system = setup.distro()
+        self.paclist = setup.paclist
+        self.critical = setup.critical
+        self.numupdates = setup.numupdates
+
+    def update(self):
+        pass
+
+    def list_packs(self):
+        pass
+
+    def check_critical(self):
+        pass
+
+
+class Redhat(Setup):
+
+    def __init__(self):
+        setup = Setup()
+        self.system = setup.distro()
+        self.paclist = setup.paclist
+        self.critical = setup.critical
+        self.numupdates = setup.numupdates
+
+    def udpate(self):
+        pass
+
+    def list_packs(self):
+        pass
+
+    def check_critical(self):
+        pass
 
 
 def note_set_send(title, body):
